@@ -4,6 +4,7 @@
 #include <QQmlContext>
 #include <QDebug>
 #include <QtAndroid>
+#include <QByteArray>
 int main(int argc, char *argv[])
 {
     QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
@@ -13,9 +14,7 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
 
     NFCManager nfcManager;
-
     engine.rootContext()->setContextProperty("NFCManager",&nfcManager);
-
 
     const QUrl url(QStringLiteral("qrc:/main.qml"));
     engine.load(url);

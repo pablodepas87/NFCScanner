@@ -10,6 +10,7 @@ NFCManager::NFCManager(QObject *parent) : QObject(parent)
     ,m_nfcNotAvailableMessage {"NFC not available.Enabled it on device settings"}
     ,m_targetDetectingMessage {"Move the device to NFC target "}
     ,m_targetDetecting {false}
+    ,m_targetConnected {false}
     ,m_targetUID {""}
     ,m_targetAccessMethod {""}
     ,m_targetType{""}

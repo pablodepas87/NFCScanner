@@ -1,7 +1,9 @@
 #include "nfcmanager.h"
 #include <QDebug>
+#include <QNdefMessage>
+#include <QNdefNfcTextRecord>
 
-static const int nfcScanAvailableTimerDuration = 5000;
+static const int nfcScanAvailableTimerDuration = 2000;
 
 NFCManager::NFCManager(QObject *parent) : QObject(parent)
     ,m_isNFCSupported {false}
@@ -27,8 +29,8 @@ NFCManager::NFCManager(QObject *parent) : QObject(parent)
    connect(nfcAvailableTimer,SIGNAL(timeout()),this,SLOT(scanNFCAvailablety()));
    nfcAvailableTimer->start(nfcScanAvailableTimerDuration);
 
-   connect(nfcManger,SIGNAL(targetDetected()),this,SLOT(targetDetected()));
-   connect(nfcManger,SIGNAL(targetLost()),this,SLOT(targetLost()));
+   connect(nfcManger,&QNearFieldManager::targetDetected,this,&NFCManager::targetDetected);
+   connect(nfcManger,&QNearFieldManager::targetLost,this,&NFCManager::targetLost);
 }
 
 bool NFCManager::isNFCsupported() const
@@ -51,7 +53,7 @@ bool NFCManager::targetConnected() const
     return m_targetConnected;
 }
 
-QString NFCManager::targetUID() const
+QByteArray NFCManager::targetUID() const
 {
     return m_targetUID;
 }
@@ -71,6 +73,24 @@ QString NFCManager::targetError() const
     return m_targetError;
 }
 
+QNdefMessage NFCManager::ndefMessage() const
+{
+    QNdefNfcTextRecord txtRecord;
+    txtRecord.setText("Hello World");
+    return QNdefMessage(txtRecord);
+
+}
+
+QNdefMessage NFCManager::emptyNdefMessage() const
+{
+    QNdefMessage nDefMessage;
+    QNdefRecord nullRecord;
+    nullRecord.setTypeNameFormat(QNdefRecord::Empty);
+    nDefMessage.append(nullRecord);
+    nDefMessage.append(nullRecord);
+    return nDefMessage;
+}
+
 void NFCManager::setNFCAvailable(bool isNFCAvailable)
 {
     if (m_isNFCAvailable == isNFCAvailable)
@@ -84,40 +104,65 @@ void NFCManager::scanNFCAvailablety()
 {
     // SCAN if the NFC of the device is active or not
 
-    if (isNFCAvailable() != nfcManger->isAvailable()) {
+ //    if (isNFCAvailable() != nfcManger->isAvailable()) {
        setNFCAvailable(nfcManger->isAvailable());
        if (isNFCAvailable()){
-
         // start to detected nfc target
-        nfcManger->setTargetAccessModes(QNearFieldManager::NdefReadTargetAccess);
+        nfcManger->setTargetAccessModes(QNearFieldManager::NdefWriteTargetAccess);
         m_targetDetecting = nfcManger->startTargetDetection();
         emit targetDetectingChanged();
-
        }
        else{
-
         // stop to detected nfc target because NFC is not available
         nfcManger->setTargetAccessModes(QNearFieldManager::NoTargetAccess);
         nfcManger->stopTargetDetection();
         m_targetDetecting = false;
         emit targetDetectingChanged();
-
        }
-    }
+//    }
 }
 
 void NFCManager::targetDetected(QNearFieldTarget *target)
 {
-
-    connect(target,SIGNAL(error), this, SLOT(setTargetError()));
+    connect(target,&QNearFieldTarget::requestCompleted, this, &NFCManager::readRequest);
+    connect(target,&QNearFieldTarget::ndefMessageRead, this, &NFCManager::readMemoryBlock);
+    connect(target,&QNearFieldTarget::ndefMessagesWritten, this, &NFCManager::ndefMessageWritten);
+    connect(target,&QNearFieldTarget::error, this, &NFCManager::setTargetError);
 
     m_targetConnected = true;
+    emit targetConnectedChanged();
 
-    setTargetUID(QString::fromStdString(target->uid().toStdString()));
+    // the uid into st25 app is reverse respect to target->uid so i reversed it
+    QByteArray uid(target->uid());
+    std::reverse(uid.begin(),uid.end());
+
+    setTargetUID(uid.toHex(' ').toUpper());
     setTargetAccessMethod(target->accessMethods());
     setTargetType(target->type());
 
-    emit targetConnectedChanged();
+    m_request = target->writeNdefMessages(QList<QNdefMessage>() << ndefMessage());
+    if (!m_request.isValid())
+       setTargetError(QNearFieldTarget::NdefWriteError, m_request);
+    // readNdefMessage
+    m_request = target->readNdefMessages();
+    if (!m_request.isValid())
+       setTargetError(QNearFieldTarget::NdefReadError, m_request);
+
+    // erase ndefmessage
+    m_request = target->writeNdefMessages(QList<QNdefMessage>() << emptyNdefMessage());
+    if (!m_request.isValid())
+       setTargetError(QNearFieldTarget::NdefWriteError, m_request);
+
+    m_request = target->sendCommand(readCommand());
+    QByteArray response = target->requestResponse(m_request).toByteArray();
+    qDebug() << response.toHex(' ').data();
+
+
+    m_request = target->sendCommand(writeCommand());
+    if (!m_request.isValid())
+        setTargetError(QNearFieldTarget::CommandError, m_request);
+    response = target->requestResponse(m_request).toByteArray();
+    qDebug() << response.toHex(' ').data();
 }
 
 void NFCManager::targetLost(QNearFieldTarget *target)
@@ -129,7 +174,7 @@ void NFCManager::targetLost(QNearFieldTarget *target)
     target->deleteLater();
 }
 
-void NFCManager::setTargetUID(QString targetUID)
+void NFCManager::setTargetUID(QByteArray targetUID)
 {
     if (m_targetUID == targetUID)
         return;
@@ -143,7 +188,7 @@ void NFCManager::setTargetType(QNearFieldTarget::Type typeTarget)
     switch (typeTarget){
 
     case QNearFieldTarget::ProprietaryTag:
-         m_targetType = "unidentified proprietary target tag";
+         m_targetType = "NFC tag type 5 target";
          break;
     case QNearFieldTarget::NfcTagType1:
          m_targetType = "NFC tag type 1 target.";
@@ -185,12 +230,15 @@ void NFCManager::setTargetAccessMethod(QNearFieldTarget::AccessMethods accessMet
      case QNearFieldTarget::LlcpAccess:
           m_targetAccessMethod = "The target supports peer-to-peer LLCP communication.";
           break;
+     case QNearFieldTarget::NdefAccess |  QNearFieldTarget::TagTypeSpecificAccess:
+          m_targetAccessMethod = "NdefAccess & TagTypeSpecifAccess";
+          break;
     default:
-          m_targetAccessMethod = "";
+          m_targetAccessMethod = "AccessMethod unefined";
           break;
     }
 
-
+    emit targetAccessMethodschanged();
 }
 
 void NFCManager::setTargetError(QNearFieldTarget::Error error, const QNearFieldTarget::RequestId &id)
@@ -223,12 +271,70 @@ void NFCManager::setTargetError(QNearFieldTarget::Error error, const QNearFieldT
         case QNearFieldTarget::NdefWriteError:
             m_targetError = "NDEF write error";
             break;
+        case QNearFieldTarget::CommandError:
+            m_targetError = "Failed to send a command to the target.";
+            break;
         default:
             m_targetError = "Unknown error";
         }
 
         emit targetErrochanged();
-        nfcManger->setTargetAccessModes(QNearFieldManager::NoTargetAccess);
-        nfcManger->stopTargetDetection();
+}
 
+void NFCManager::readMemoryBlock(const QNdefMessage &msg)
+{
+    /*A QNdefMessage is a collection of 0 or more QNdefRecords.
+     * QNdefMessage inherits from QList<QNdefRecord> and
+     * therefore the standard QList functions can be used to manipulate
+     * the NDEF records in the message.*/
+
+    for (const QNdefRecord &record : msg){
+        if ( record.isRecordType<QNdefNfcTextRecord>()){
+           QNdefNfcTextRecord textRecord(record);
+           qDebug() << textRecord.text();
+        }
+    }
+
+    // After read ndefMessage i must erase it and test is completed
+    nfcManger->setTargetAccessModes(QNearFieldManager::NdefWriteTargetAccess);
+}
+
+void NFCManager::ndefMessageWritten()
+{
+   nfcManger->setTargetAccessModes(QNearFieldManager::NdefReadTargetAccess);
+}
+
+void NFCManager::readRequest(const QNearFieldTarget::RequestId &id)
+{
+    Q_UNUSED(id)
+}
+
+QByteArray NFCManager::readCommand()
+{
+    /* more info pag.84 datasheet*/
+
+    QByteArray readCommand;
+
+    readCommand.append(0x02);   // REQUEST FLAG CONFIG 0010 0000 (big endian) put the tag in Quiet state
+    readCommand.append(0x20);   // Read single block command
+    readCommand.append(0x01);   // block number no big endian
+
+    return readCommand;
+}
+
+QByteArray NFCManager::writeCommand()
+{
+    /* more info pag.86 datasheet ST25DV04K-I*/
+
+    QByteArray writeCommand;
+
+    writeCommand.append(0x02);   // REQUEST FLAG CONFIG 0010 0000 (big endian) put the tag in Quiet state
+    writeCommand.append(0x21);   // Write single block command
+    writeCommand.append(0x01);   // block number no big endian
+    writeCommand.append(0xFF);   // START DATA first byte of the block
+    writeCommand.append(0xFF);
+    writeCommand.append(0xFF);
+    writeCommand.append(0xFF);   // ENDA DATA LAST byte of the block ( 1 block is 4 byte )
+
+    return writeCommand;
 }

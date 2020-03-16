@@ -106,7 +106,7 @@ ApplicationWindow {
             color: "white"
         }
 
-    }
+     }
 
 }
 

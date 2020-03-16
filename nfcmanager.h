@@ -17,7 +17,7 @@ class NFCManager : public QObject
     Q_PROPERTY(QString nfcNotAvailableMessage  MEMBER m_nfcNotAvailableMessage CONSTANT )
     Q_PROPERTY(QString targetDetectingMessage  MEMBER m_targetDetectingMessage CONSTANT )
     Q_PROPERTY(bool targetConnected READ targetConnected NOTIFY targetConnectedChanged)
-    Q_PROPERTY(QString targetUID READ targetUID WRITE setTargetUID NOTIFY  targetUIDchanged)
+    Q_PROPERTY(QByteArray targetUID READ targetUID WRITE setTargetUID NOTIFY  targetUIDchanged)
     Q_PROPERTY(QString targetAccessMethod READ targetAccessMethod NOTIFY targetAccessMethodschanged)
     Q_PROPERTY(QString targetType READ targetType NOTIFY targetTypechanged )
     Q_PROPERTY(QString targetError READ targetError NOTIFY targetErrochanged)
@@ -30,10 +30,12 @@ public:
     bool isNFCAvailable() const;
     bool targetDetecting() const;
     bool targetConnected() const;
-    QString targetUID() const;
+    QByteArray targetUID() const;
     QString targetAccessMethod() const;
     QString targetType() const;
     QString targetError() const;
+    QNdefMessage ndefMessage() const;
+    QNdefMessage emptyNdefMessage() const;
 
 public slots:
 
@@ -41,10 +43,14 @@ public slots:
     void scanNFCAvailablety();
     void targetDetected(QNearFieldTarget *target);
     void targetLost(QNearFieldTarget *target);
-    void setTargetUID(QString targetUID);
+    void setTargetUID(QByteArray targetUID);
     void setTargetType(QNearFieldTarget::Type typeTarget);
     void setTargetAccessMethod(QNearFieldTarget::AccessMethods accessMethod);
     void setTargetError(QNearFieldTarget::Error error, const QNearFieldTarget::RequestId &id);
+    void readMemoryBlock(const QNdefMessage &msg);
+    void ndefMessageWritten();
+    void readRequest(const QNearFieldTarget::RequestId &id);
+
 
 signals:
 
@@ -59,8 +65,12 @@ signals:
 
 private:
 
+    QByteArray readCommand();
+    QByteArray writeCommand();
+
     QNearFieldManager *nfcManger = new QNearFieldManager(this);
-    QNearFieldTarget  *nfcTarget;
+    QNearFieldTarget *currentTag;
+    QNearFieldTarget::RequestId  m_request ;
     bool m_isNFCSupported;
     bool m_isNFCAvailable;
     QString m_supportedMessage;
@@ -69,7 +79,7 @@ private:
     QTimer *nfcAvailableTimer = new QTimer();
     bool m_targetDetecting;
     bool m_targetConnected;
-    QString m_targetUID;
+    QByteArray m_targetUID;
     QString m_targetAccessMethod;
     QString m_targetType;
     QString m_targetError;

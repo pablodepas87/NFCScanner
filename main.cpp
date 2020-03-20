@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 
     #ifdef Q_OS_ANDROID
      // the splashscreen is customizable with androidManifest.xml
-     QtAndroid::hideSplashScreen(2000);
+     QtAndroid::hideSplashScreen(100);
     #endif
     return app.exec();
 }

@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>objects/InfoTagRow.qml</file>
+        <file>objects/TagConnectionState.qml</file>
+        <file>mainItems/NFCTechNotSupported.qml</file>
+        <file>mainItems/NFCTechSupported.qml</file>
+        <file>mainItems/TagNotConnected.qml</file>
+        <file>mainItems/TagConnected.qml</file>
+        <file>objects/OperationField.qml</file>
+        <file>objects/TagErrorField.qml</file>
+    </qresource>
+</RCC>

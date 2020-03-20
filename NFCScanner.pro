@@ -20,7 +20,9 @@ SOURCES += \
 HEADERS += \
     nfcmanager.h
 
-RESOURCES += qml.qrc
+RESOURCES += \
+     qml/qml.qrc \
+     images/images.qrc
 
 # Additional import path used to resolve QML modules in Qt Creator's code model
 QML_IMPORT_PATH =

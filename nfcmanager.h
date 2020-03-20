@@ -16,11 +16,15 @@ class NFCManager : public QObject
     Q_PROPERTY(QString supportedMessage MEMBER m_supportedMessage CONSTANT )
     Q_PROPERTY(QString nfcNotAvailableMessage  MEMBER m_nfcNotAvailableMessage CONSTANT )
     Q_PROPERTY(QString targetDetectingMessage  MEMBER m_targetDetectingMessage CONSTANT )
-    Q_PROPERTY(bool targetConnected READ targetConnected NOTIFY targetConnectedChanged)
+    Q_PROPERTY(bool targetConnected READ targetConnected  NOTIFY targetConnectedChanged)
     Q_PROPERTY(QByteArray targetUID READ targetUID WRITE setTargetUID NOTIFY  targetUIDchanged)
     Q_PROPERTY(QString targetAccessMethod READ targetAccessMethod NOTIFY targetAccessMethodschanged)
     Q_PROPERTY(QString targetType READ targetType NOTIFY targetTypechanged )
     Q_PROPERTY(QString targetError READ targetError NOTIFY targetErrochanged)
+    Q_PROPERTY(int operationCount READ operationCount NOTIFY operationCountchanged)
+    Q_PROPERTY(bool testBlockWrited READ testBlockWrited NOTIFY testBlockWritedchanged )
+    Q_PROPERTY(bool testBlockReset READ testBlockReset NOTIFY testBlockResetchanged )
+    Q_PROPERTY(QByteArray dataWrited READ dataWrited NOTIFY dataWritedchanged )
 
 public:
 
@@ -36,6 +40,12 @@ public:
     QString targetError() const;
     QNdefMessage ndefMessage() const;
     QNdefMessage emptyNdefMessage() const;
+    bool UseNFCTextMessage() const;
+    int operationCount() const;
+    bool testBlockWrited() const;
+    bool testBlockReset() const;
+
+    QByteArray dataWrited() const;
 
 public slots:
 
@@ -50,6 +60,8 @@ public slots:
     void readMemoryBlock(const QNdefMessage &msg);
     void ndefMessageWritten();
     void readRequest(const QNearFieldTarget::RequestId &id);
+    void setUseNFCTextMessage(bool UseNFCTextMessage);
+    void infoTag(QNearFieldTarget *target);
 
 
 signals:
@@ -62,14 +74,21 @@ signals:
     void targetAccessMethodschanged();
     void targetTypechanged();
     void targetErrochanged();
+    void operationCountchanged();
+    void writeBlockOkchanged();
+    void testBlockWritedchanged();
+    void testBlockResetchanged();
+    void dataWritedchanged(QByteArray dataWrited);
 
 private:
 
     QByteArray readCommand();
     QByteArray writeCommand();
+    QByteArray resetBlockCommand();
+    void dataToWrite();
+    char charToWrite(int pos);
 
     QNearFieldManager *nfcManger = new QNearFieldManager(this);
-    QNearFieldTarget *currentTag;
     QNearFieldTarget::RequestId  m_request ;
     bool m_isNFCSupported;
     bool m_isNFCAvailable;
@@ -83,6 +102,14 @@ private:
     QString m_targetAccessMethod;
     QString m_targetType;
     QString m_targetError;
+    bool m_UseNFCTextMessage;
+    QByteArray blockMemoryToWrite;
+    QByteArray nullArray ;
+    int m_operationCount;
+    bool m_writeBlockOK;
+    bool m_testBlockWrited;
+    bool m_testBlockReset;
+
 };
 
 #endif // NFCMANAGER_H
